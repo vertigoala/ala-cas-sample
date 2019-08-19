@@ -1,0 +1,5 @@
+# version only templates on /config
+config/application.yml
+config/userdetails-config.properties
+config/management.properties
+config/apikey-config.properties

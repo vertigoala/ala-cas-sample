@@ -1,0 +1,166 @@
+#
+# This is a docker stack compose for CAS and its dependencies
+# We are pinning services to nodes in order to keep using local volumes until
+# we give up being lazy and use volume drivers accordingly.
+#
+version: "3.7"
+
+services:
+
+  commonui-sample:
+    image: vertigoala/commonui-sample:latest
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker0
+      labels:
+        traefik.frontend.rule: "PathPrefix:/commonui-bs3-2019"
+        traefik.backend: "commonui-sample"
+        traefik.port: "80"
+        traefik.enable: "true"
+    networks:
+      - traefik-net
+
+  cas:
+    image: vertigoala/cas5
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker3
+      labels:
+        traefik.frontend.rule: "PathPrefix:/cas"
+        traefik.backend: "cas"
+        traefik.port: "9000"
+        traefik.enable: "true"
+    networks:
+      - traefik-net
+      - backend
+    configs:
+      - source: cas-config
+        target: /data/cas/config/application.yml
+
+  mysqldbcas:
+    image: mysql:5.7
+    env_file: ./env/.envcas
+    networks:
+      - backend
+    volumes:
+      - mysqldbcas:/var/lib/mysql
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker3
+
+  mongodbcas:
+    image: mongo:3.4.6
+    env_file: ./env/.envcas
+    networks:
+      - backend
+    volumes:
+      - mongodbcas:/data/db
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker3
+  
+  userdetails:
+    image: vertigoala/userdetails
+    networks:
+      - traefik-net
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker3
+      labels:
+        traefik.frontend.rule: "PathPrefix:/userdetails"
+        traefik.backend: "userdetails"
+        traefik.port: "8080"
+        traefik.enable: "true"
+    configs:
+      - source: userdetails-config
+        target: /data/userdetails/config/userdetails-config.properties
+
+  cas-management:
+    image: vertigoala/cas5-management
+    networks:
+      - traefik-net
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.alanode == worker3
+      labels:
+        traefik.frontend.rule: "PathPrefix:/cas-management"
+        traefik.backend: "cas-management"
+        traefik.port: "8070"
+        traefik.enable: "true"
+    configs:
+      - source: cas-management-config
+        target: /data/cas-management/config/management.properties
+      - source: cas-management-user-config
+        target: /data/cas-management/config/users.properties
+  # APIKEY
+  mysqlapidb:
+    image: mysql:5.7
+    env_file: ./env/.envapi
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+          - node.labels.alanode == manager0
+    configs:
+      - source: apikey-schema
+        target: /docker-entrypoint-initdb.d/apikey-schema.sql
+    volumes:
+      - mysqlapidb:/var/lib/mysql
+  apikey:
+    image: vertigoala/apikey
+    configs:
+      - source: apikey-config
+        target: /data/apikey/config/apikey-config.properties
+    networks:
+      - backend
+      - traefik-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+          - node.labels.alanode == manager0
+      labels:
+        traefik.frontend.rule: "PathPrefix:/apikey"
+        traefik.backend: "apikey"
+        traefik.port: "8080"
+        traefik.enable: "true"
+
+configs:
+  apikey-schema:
+    file: ./config/apikey_schema.sql
+  apikey-config:
+    file: ./config/apikey-config.properties
+  userdetails-config:
+    file: ./config/userdetails-config.properties
+  cas-config:
+    file: ./config/application.yml
+  cas-management-config:
+    file: ./config/management.properties
+  cas-management-user-config:
+    file: ./config/users.properties
+volumes:
+  mongodbcas:
+  mysqldbcas:
+  mysqlapidb:
+networks:
+  traefik-net:
+    external: true
+    name: traefik_traefik-net
+  backend:
+    driver: overlay
