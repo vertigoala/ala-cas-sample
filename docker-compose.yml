@@ -15,7 +15,7 @@ services:
           - node.role == worker
           - node.labels.alanode == worker0
       labels:
-        traefik.frontend.rule: "PathPrefix:/commonui-bs3-2019"
+        traefik.frontend.rule: "PathPrefix:/commonui-bs3"
         traefik.backend: "commonui-sample"
         traefik.port: "80"
         traefik.enable: "true"
